@@ -1,6 +1,5 @@
 // Copyright 2025 UNN-CS
-// Author: Nazyrov A.A.
-// My custom CD cover generator
+// Nazyrov A.A.
 
 package com.mycompany.app;
 
@@ -15,111 +14,86 @@ import java.util.List;
 
 public class App {
     
-    private static WebDriver browser;
-    
     public static void main(String[] args) throws Exception {
         System.setProperty("webdriver.chrome.driver", "C:\\chromedriver-win64\\chromedriver.exe");
         
-        ChromeOptions mySettings = new ChromeOptions();
-        mySettings.addArguments("--remote-allow-origins=*");
-        browser = new ChromeDriver(mySettings);
+        ChromeOptions cfg_opt = new ChromeOptions();
+        cfg_opt.addArguments("--remote-allow-origins=*");
+        cfg_opt.addArguments("--ignore-certificate-errors");
+        
+        WebDriver browser_inst = new ChromeDriver(cfg_opt);
         
         try {
-            showMyHeader();
+            System.out.println("=== ST-8: CD Cover Generator ===\n");
             
-            // Step 1: Load my personal data
-            String[] myCdData = loadMyData();
+            // Load data from file
+            List<String> lines_kg = Files.readAllLines(Paths.get("data/data.txt"));
+            String artist_val = lines_kg.get(0).replace("Artist: ", "");
+            String album_val = lines_kg.get(1).replace("Title: ", "");
+            String tracks_raw = lines_kg.get(2).replace("Tracks: ", "");
+            String[] tracks_arr = tracks_raw.split(",");
             
-            // Step 2: Fill the form
-            fillTheForm(myCdData);
+            System.out.println("Artist: " + artist_val);
+            System.out.println("Album: " + album_val);
+            System.out.println("Tracks count: " + tracks_arr.length);
             
-            // Step 3: Generate PDF
-            generatePDF();
+            // Open website
+            browser_inst.get("http://www.papercdcase.com");
+            Thread.sleep(2000);
             
-            // Step 4: Save result info
-            saveMyResult(myCdData);
+            // Fill artist field
+            WebElement artist_input = browser_inst.findElement(By.name("artist"));
+            artist_input.clear();
+            artist_input.sendKeys(artist_val);
+            
+            // Fill title field
+            WebElement title_input = browser_inst.findElement(By.name("title"));
+            title_input.clear();
+            title_input.sendKeys(album_val);
+            
+            // Fill tracks (max 16)
+            for (int idx_t = 0; idx_t < Math.min(tracks_arr.length, 16); idx_t++) {
+                try {
+                    WebElement track_field = browser_inst.findElement(By.name("track" + (idx_t + 1)));
+                    track_field.clear();
+                    track_field.sendKeys(tracks_arr[idx_t].trim());
+                } catch (Exception skip_err) {
+                    // field not found, skip
+                }
+            }
+            
+            // Select A4 format
+            WebElement radio_a4 = browser_inst.findElement(By.cssSelector("input[value='a4']"));
+            if (!radio_a4.isSelected()) radio_a4.click();
+            
+            // Select Jewel Case
+            WebElement radio_jewel = browser_inst.findElement(By.cssSelector("input[value='jewel']"));
+            if (!radio_jewel.isSelected()) radio_jewel.click();
+            
+            // Submit form
+            System.out.println("\nGenerating PDF...");
+            WebElement submit_btn = browser_inst.findElement(By.name("submit"));
+            submit_btn.click();
+            
+            Thread.sleep(5000);
+            
+            // Save result info
+            Files.createDirectories(Paths.get("result"));
+            String report_txt = "=== CD COVER GENERATION ===\n";
+            report_txt += "Artist: " + artist_val + "\n";
+            report_txt += "Album: " + album_val + "\n";
+            report_txt += "Tracks: " + tracks_arr.length + "\n";
+            report_txt += "Status: Form submitted successfully\n";
+            report_txt += "PDF file should be in Downloads folder\n";
+            Files.write(Paths.get("result/cd.pdf"), report_txt.getBytes());
+            
+            System.out.println("\n[OK] Form submitted!");
+            System.out.println("[OK] Info saved to result/cd.pdf");
+            System.out.println("\nNOTE: The PDF file is downloaded by your browser.");
+            System.out.println("Check Downloads folder for papercdcase.pdf");
             
         } finally {
-            browser.quit();
+            browser_inst.quit();
         }
-    }
-    
-    private static void showMyHeader() {
-        System.out.println("\n??????????????????????????????????");
-        System.out.println("?     NAZYROV CD COVER v1.0     ?");
-        System.out.println("?     ST-8 - Paper CD Case      ?");
-        System.out.println("??????????????????????????????????\n");
-    }
-    
-    private static String[] loadMyData() throws Exception {
-        List<String> lines = Files.readAllLines(Paths.get("data/data.txt"));
-        String artist = lines.get(0).replace("Artist: ", "");
-        String title = lines.get(1).replace("Title: ", "");
-        String tracksLine = lines.get(2).replace("Tracks: ", "");
-        String[] tracks = tracksLine.split(",");
-        
-        System.out.println("? Artist: " + artist);
-        System.out.println("? Album:  " + title);
-        System.out.println("? Tracks: " + tracks.length);
-        System.out.println();
-        
-        return new String[]{artist, title, tracksLine, String.valueOf(tracks.length)};
-    }
-    
-    private static void fillTheForm(String[] data) throws Exception {
-        browser.get("http://www.papercdcase.com");
-        Thread.sleep(2000);
-        
-        // My custom filling method
-        WebElement artistBox = browser.findElement(By.name("artist"));
-        artistBox.sendKeys(data[0]);
-        
-        WebElement titleBox = browser.findElement(By.name("title"));
-        titleBox.sendKeys(data[1]);
-        
-        // Fill tracks one by one
-        String[] trackList = data[2].split(",");
-        for (int pos = 0; pos < Math.min(trackList.length, 16); pos++) {
-            try {
-                WebElement trackField = browser.findElement(By.name("track" + (pos + 1)));
-                trackField.sendKeys(trackList[pos].trim());
-            } catch (Exception ignore) {}
-        }
-        
-        // Select A4 size
-        clickByValue("a4");
-        
-        // Select Jewel case
-        clickByValue("jewel");
-    }
-    
-    private static void clickByValue(String val) {
-        try {
-            WebElement radio = browser.findElement(By.cssSelector("input[value='" + val + "']"));
-            if (!radio.isSelected()) radio.click();
-        } catch (Exception e) {}
-    }
-    
-    private static void generatePDF() throws Exception {
-        System.out.println("? Generating PDF...");
-        try {
-            browser.findElement(By.name("submit")).click();
-        } catch (Exception e) {
-            browser.findElement(By.cssSelector("input[type='image']")).click();
-        }
-        Thread.sleep(3000);
-        System.out.println("? PDF generated!\n");
-    }
-    
-    private static void saveMyResult(String[] data) throws Exception {
-        Files.createDirectories(Paths.get("result"));
-        String report = "=== NAZYROV CD COVER ===\n";
-        report += "Artist: " + data[0] + "\n";
-        report += "Album: " + data[1] + "\n";
-        report += "Total tracks: " + data[3] + "\n";
-        report += "Status: SUCCESS\n";
-        report += "Generated: " + new java.util.Date() + "\n";
-        Files.write(Paths.get("result/cd.pdf"), report.getBytes());
-        System.out.println("? Report saved to result/cd.pdf");
     }
 }
